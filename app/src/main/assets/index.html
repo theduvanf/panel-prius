@@ -413,7 +413,7 @@ const REAL_YAW = Math.PI; // turns the scanned model so its nose points the same
     inner.traverse(o=>{ if(o.isMesh&&o.material){ o.material.envMapIntensity=1; } });
     car.visible=false; scene.add(pivot); realCar=pivot;
     const cb=document.getElementById('colorBox'); if(cb) cb.hidden=true;
-  }, undefined, ()=>{});
+  }, undefined, err=>{ if(window.Android) setMsg('No se pudo cargar tu Prius en 3D: '+(err&&err.message||'error')); });
 })();
 let yaw=.75, drag=null;
 carCanvas.addEventListener('pointerdown',e=>{drag=e.clientX;carCanvas.setPointerCapture(e.pointerId)});

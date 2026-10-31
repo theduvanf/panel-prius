@@ -14,6 +14,8 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONArray
@@ -21,6 +23,10 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
 class MainActivity : Activity() {
+
+    companion object {
+        const val ASSET_HOST = "appassets.androidplatform.net"
+    }
 
     private lateinit var web: WebView
     private lateinit var obd: ObdBle
@@ -37,7 +43,29 @@ class MainActivity : Activity() {
         web.settings.domStorageEnabled = true
         web.settings.allowFileAccess = true
         web.settings.mediaPlaybackRequiresUserGesture = false
-        web.webViewClient = WebViewClient()
+        // Serve the app's own files from a local https address so the page can fetch the 3D model.
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val url = request.url
+                if (url.host != ASSET_HOST) return null
+                val path = (url.path ?: "/").removePrefix("/").ifEmpty { "index.html" }
+                return try {
+                    val mime = when (path.substringAfterLast('.').lowercase()) {
+                        "html" -> "text/html"
+                        "js" -> "application/javascript"
+                        "glb" -> "model/gltf-binary"
+                        "json" -> "application/json"
+                        "png" -> "image/png"
+                        else -> "application/octet-stream"
+                    }
+                    val res = WebResourceResponse(mime, if (mime.startsWith("text") || mime.endsWith("javascript")) "utf-8" else null, assets.open(path))
+                    res.responseHeaders = mapOf("Access-Control-Allow-Origin" to "*")
+                    res
+                } catch (e: Exception) {
+                    WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                }
+            }
+        }
         web.webChromeClient = WebChromeClient()
         web.addJavascriptInterface(Bridge(), "Android")
         setContentView(web)
@@ -53,7 +81,7 @@ class MainActivity : Activity() {
                 js("window.onObdData && window.onObdData($data)")
         })
 
-        web.loadUrl("file:///android_asset/index.html")
+        web.loadUrl("https://$ASSET_HOST/index.html")
         hideSystemBars()
     }
 
