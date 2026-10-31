@@ -1,0 +1,42 @@
+name: Construir APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Agregar three.js (gráficos 3D sin internet)
+        run: curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js -o app/src/main/assets/three.min.js
+
+      - name: Compilar
+        run: gradle assembleRelease --no-daemon
+
+      - name: Preparar archivo
+        run: cp app/build/outputs/apk/release/app-release.apk PanelPrius.apk
+
+      - name: Publicar descarga
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Panel Prius 1.0.${{ github.run_number }}
+          body: Toca PanelPrius.apk para descargar e instalar en tu tablet.
+          files: PanelPrius.apk
+          make_latest: true

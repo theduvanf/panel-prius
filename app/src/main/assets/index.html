@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Panel Prius C</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: car-screen home — vertical status sidebar on the left (clock, recent apps, home), content as rounded widget cards; on phones the sidebar becomes a bottom bar. Single dark look. */
+:root{
+  --bg:#000; --card:#1c1c1f; --card-2:#2a2a2f; --line:#333338;
+  --fg:#f5f5f7; --muted:#9a9aa2; --accent:#0a84ff; --ev:#30d158; --gas:#ff9f0a; --red:#ff453a;
+  --ui:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);margin:0;overflow:hidden;-webkit-user-select:none;user-select:none}
+*{box-sizing:border-box}
+button{font-family:inherit;color:inherit}
+.app{height:100%;display:grid;grid-template-columns:84px 1fr;gap:10px;padding-block:10px;
+  padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+/* sidebar */
+.side{display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px 0}
+.time{font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.sig{display:flex;gap:2px;align-items:flex-end;height:12px;margin-top:-8px}
+.sig i{width:3px;background:var(--fg);border-radius:1px}
+.side .apps{display:flex;flex-direction:column;gap:14px;margin-top:8px;flex:1}
+.ic{width:56px;height:56px;border-radius:14px;border:0;display:grid;place-items:center;cursor:pointer;padding:0;position:relative}
+.ic svg{width:30px;height:30px}
+.ic.on::after{content:"";position:absolute;left:-10px;top:18px;width:4px;height:20px;border-radius:2px;background:var(--fg)}
+.ic:focus-visible,.cardbtn:focus-visible,.tile-app:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.home{width:50px;height:50px;border-radius:50%;background:var(--card);border:0;display:grid;place-items:center;cursor:pointer}
+.home svg{width:22px;height:22px}
+/* icon colors */
+.c-map{background:linear-gradient(160deg,#5ac8fa,#0a84ff)}
+.c-car{background:linear-gradient(160deg,#64d2ff,#30d158)}
+.c-trip{background:linear-gradient(160deg,#ffd60a,#ff9f0a)}
+.c-obd{background:linear-gradient(160deg,#bf5af2,#5e5ce6)}
+.c-set{background:linear-gradient(160deg,#8e8e93,#48484a)}
+.c-dash{background:linear-gradient(160deg,#3a3a3c,#1c1c1e);border:1px solid var(--line)}
+/* views */
+.view{min-height:0;height:100%}
+.view[hidden]{display:none!important}
+#v-dash{display:grid;grid-template-columns:1.35fr 1fr;grid-template-rows:1fr 1fr;gap:10px}
+.card{background:var(--card);border-radius:22px;overflow:hidden;position:relative;min-height:0}
+.mapcard{grid-row:1/3}
+.mapbox,.carbox{position:absolute;inset:0}
+canvas{display:block;width:100%;height:100%}
+#car{cursor:grab;touch-action:none}
+.speedpill{position:absolute;left:14px;bottom:14px;display:flex;align-items:center;gap:10px;background:rgba(28,28,31,.92);backdrop-filter:blur(10px);border-radius:16px;padding:8px 14px 8px 8px}
+.limit{width:46px;height:56px;background:#fff;color:#000;border-radius:7px;border:2px solid #000;outline:2px solid #fff;display:grid;place-items:center;text-align:center;font-size:8px;font-weight:800;line-height:1;padding-top:3px}
+.limit b{font-size:22px;display:block}
+.bigv{font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.bigv small{font-size:13px;color:var(--muted);font-weight:600;margin-left:3px}
+.nav{position:absolute;left:14px;right:14px;top:14px;background:rgba(28,28,31,.92);backdrop-filter:blur(10px);border-radius:16px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.nav .arrow{width:40px;height:40px;border-radius:10px;background:var(--ev);display:grid;place-items:center;flex:none}
+.nav .arrow svg{width:24px;height:24px}
+.nav b{display:block;font-size:20px}
+.nav span{color:var(--muted);font-size:13px}
+.ctitle{position:absolute;top:12px;left:14px;font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;z-index:2}
+.carinfo{position:absolute;left:14px;bottom:12px;right:14px;display:flex;justify-content:space-between;align-items:flex-end;z-index:2;pointer-events:none}
+.mode{display:inline-flex;gap:6px;align-items:center;font-size:13px;font-weight:700;padding:5px 10px;border-radius:99px;background:var(--card-2);color:var(--muted)}
+.mode.ev{color:var(--ev)} .mode.gas{color:var(--gas)}
+.trip{padding:44px 16px 14px;display:grid;grid-template-rows:1fr auto;height:100%;gap:10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start}
+.stat{background:var(--card-2);border-radius:14px;padding:10px 12px}
+.stat small{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.stat b{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.cardbtn{border:0;border-radius:14px;padding:13px;font-size:15px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer}
+.cardbtn.live{background:var(--card-2);color:var(--ev)}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--gas)}
+.dot.live{background:var(--ev)}
+/* home grid */
+#v-home{display:flex;align-items:center;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(4,110px);gap:22px 34px}
+a.tile-app{color:var(--fg);text-decoration:none}
+.ic.letter{font-size:38px;font-weight:800;color:#fff}
+.tile-app{background:none;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:4px;border-radius:18px}
+.tile-app .ic{width:84px;height:84px;border-radius:21px;pointer-events:none}
+.tile-app .ic svg{width:44px;height:44px}
+/* full views */
+#v-car{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.full{height:100%}
+.panel{padding:18px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.panel h2{margin:0;font-size:22px}
+.swatches{display:flex;gap:12px;flex-wrap:wrap}
+.sw{width:42px;height:42px;border-radius:50%;border:3px solid var(--line);cursor:pointer;padding:0}
+.sw.on{border-color:var(--fg)}
+.note{font-size:14px;line-height:1.5;color:var(--muted)}
+.gauge{display:flex;align-items:baseline;gap:6px}
+.gauge b{font-size:64px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--card-2);border:1px solid var(--line);border-radius:14px;padding:10px 16px;font-size:14px;max-width:min(560px,90vw);z-index:5;line-height:1.4}
+.ic img{width:100%;height:100%;border-radius:inherit;object-fit:cover}
+.ic.appic{background:var(--card-2)}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:8;padding:16px}
+.sheetbox{background:var(--card);border-radius:22px;width:min(640px,100%);max-height:86vh;display:flex;flex-direction:column;padding:16px;gap:8px}
+.sheethead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheethead b{font-size:20px}
+.sheethead .cardbtn{padding:9px 16px}
+.sheetlist{overflow:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.row{display:flex;align-items:center;gap:12px;background:var(--card-2);border:0;border-radius:14px;padding:10px 12px;font-size:16px;font-weight:600;text-align:left;cursor:pointer}
+.row img,.row .ph{width:40px;height:40px;border-radius:10px;flex:none;background:var(--line)}
+.row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.row .chk{width:26px;height:26px;border-radius:50%;border:2px solid var(--muted);flex:none;display:grid;place-items:center;font-size:15px;color:#fff}
+.row.on .chk{background:var(--accent);border-color:var(--accent)}
+@media (max-width:760px){
+  html,body{height:auto} body{overflow:auto}
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .side{position:fixed;left:0;right:0;bottom:0;flex-direction:row;justify-content:space-around;background:var(--card);padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));z-index:4}
+  .side .apps{flex-direction:row;margin:0;flex:none;gap:10px}
+  .time,.sig{display:none}
+  .ic{width:48px;height:48px}
+  .ic.on::after{left:14px;top:auto;bottom:-7px;width:20px;height:4px}
+  #v-dash,#v-car{grid-template-columns:1fr;grid-template-rows:none}
+  .mapcard{grid-row:auto;height:340px}
+  #v-dash .card,#v-car .card{min-height:260px}
+  .full{height:calc(100vh - 120px)}
+  .grid{grid-template-columns:repeat(3,1fr);gap:20px 10px}
+  .tile-app .ic{width:72px;height:72px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-map" viewBox="0 0 24 24"><path fill="#fff" d="M12 2.5 19 20l-7-3.2L5 20z"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path fill="#fff" d="M5 11l1.6-4.2A2 2 0 0 1 8.5 5.5h7a2 2 0 0 1 1.9 1.3L19 11a2 2 0 0 1 2 2v4h-2v1.5a1 1 0 0 1-2 0V17H7v1.5a1 1 0 0 1-2 0V17H3v-4a2 2 0 0 1 2-2zm2.2 0h9.6l-1.1-3.2a.6.6 0 0 0-.6-.4H8.9a.6.6 0 0 0-.6.4zM6.5 15a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zm11 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z"/></symbol>
+  <symbol id="i-trip" viewBox="0 0 24 24"><path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M4 19a8 8 0 1 1 16 0"/><path stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M12 19l4-6"/></symbol>
+  <symbol id="i-obd" viewBox="0 0 24 24"><path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M7 7l10 10-5 4V3l5 4L7 17"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="#fff" stroke-width="2.2"/><path fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="18" rx="2.5" fill="#fff"/><rect x="15" y="3" width="6" height="8" rx="2" fill="#fff"/><rect x="15" y="13" width="6" height="8" rx="2" fill="#fff"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2" fill="#fff"/><rect x="14" y="3" width="7" height="7" rx="2" fill="#fff"/><rect x="3" y="14" width="7" height="7" rx="2" fill="#fff"/><rect x="14" y="14" width="7" height="7" rx="2" fill="#fff"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="side">
+    <div class="time" id="clock">9:41</div>
+    <div class="sig" aria-hidden="true"><i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i><i style="height:12px"></i></div>
+    <div class="apps">
+      <button class="ic c-dash on" data-go="dash" aria-label="Panel"><svg><use href="#i-dash"/></svg></button>
+      <button class="ic c-map" data-go="map" aria-label="Mapa"><svg><use href="#i-map"/></svg></button>
+      <button class="ic c-car" data-go="car" aria-label="Mi Prius"><svg><use href="#i-car"/></svg></button>
+      <span id="sideFav" style="display:contents"></span>
+    </div>
+    <button class="home" data-go="home" aria-label="Inicio"><svg><use href="#i-home"/></svg></button>
+  </aside>
+
+  <main style="min-height:0">
+    <!-- Dashboard -->
+    <section class="view" id="v-dash">
+      <div class="card mapcard"><div class="mapbox" id="slotMap"></div>
+        <div class="nav"><div class="arrow"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 3l7 9h-4.5v9h-5v-9H5z"/></svg></div>
+          <div><b id="navDist">0.4 mi</b><span>Sigue derecho por la calle principal</span></div></div>
+        <div class="speedpill"><div class="limit">LÍMITE<b>35</b></div><div class="bigv"><span id="speed">0</span><small>mph</small></div></div>
+      </div>
+      <div class="card"><div class="ctitle">Mi Prius c</div><div class="carbox" id="slotCar"></div>
+        <div class="carinfo"><span class="mode" id="mode">Listo</span><span class="status"><span class="dot" id="dot"></span><span id="statusTxt">Demo</span></span></div>
+      </div>
+      <div class="card"><div class="ctitle">Viaje</div>
+        <div class="trip">
+          <div class="stats">
+            <div class="stat"><small>RPM</small><b id="rpm">0</b></div>
+            <div class="stat"><small>Motor</small><b id="cool">—</b></div>
+            <div class="stat"><small>Batería HV</small><b id="hv">—</b></div>
+            <div class="stat"><small>Distancia</small><b id="trip">0.0 mi</b></div>
+            <div class="stat"><small>Máx.</small><b id="vmax">0</b></div>
+            <div class="stat"><small>En EV</small><b id="evp">0%</b></div>
+          </div>
+          <button class="cardbtn" id="btnObd">Conectar OBD</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Home grid -->
+    <section class="view" id="v-home" hidden>
+      <div class="grid">
+        <button class="tile-app" data-go="dash"><span class="ic c-dash"><svg><use href="#i-dash"/></svg></span>Panel</button>
+        <button class="tile-app" data-go="map"><span class="ic c-map"><svg><use href="#i-map"/></svg></span>Mapa</button>
+        <button class="tile-app" data-go="car"><span class="ic c-car"><svg><use href="#i-car"/></svg></span>Mi Prius</button>
+        <button class="tile-app" data-go="car"><span class="ic c-trip"><svg><use href="#i-trip"/></svg></span>Medidores</button>
+        <button class="tile-app" id="appObd"><span class="ic c-obd"><svg><use href="#i-obd"/></svg></span>Conectar</button>
+        <button class="tile-app" data-go="car"><span class="ic c-set"><svg><use href="#i-set"/></svg></span>Ajustes</button>
+        <span id="favApps" style="display:contents"></span>
+        <button class="tile-app" id="appAdd"><span class="ic c-dash letter">+</span>Mis apps</button>
+      </div>
+    </section>
+
+    <!-- Full map -->
+    <section class="view" id="v-map" hidden>
+      <div class="card full"><div class="mapbox" id="slotMapFull"></div>
+        <div class="speedpill"><div class="limit">LÍMITE<b>35</b></div><div class="bigv"><span class="speedClone">0</span><small>mph</small></div></div>
+      </div>
+    </section>
+
+    <!-- Car detail -->
+    <section class="view" id="v-car" hidden>
+      <div class="card full"><div class="ctitle">Desliza para girar</div><div class="carbox" id="slotCarFull"></div></div>
+      <div class="card panel">
+        <h2>Prius c 2014</h2>
+        <div class="gauge"><b class="speedClone">0</b><span class="note">mph</span></div>
+        <span class="mode modeClone">Listo</span>
+        <div><div class="note" style="margin-bottom:8px">Color del carro</div><div class="swatches" id="swatches"></div></div>
+        <button class="cardbtn" id="btnDemo">Pausar demo</button>
+        <button class="cardbtn" id="btnReset" style="background:var(--card-2)">Reiniciar viaje</button>
+        <p class="note">La batería híbrida puede salir en blanco: Toyota la reporta con códigos propios en algunos modelos.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="sheet" id="sheet" hidden>
+  <div class="sheetbox">
+    <div class="sheethead"><b id="sheetTitle">Mis apps</b><button class="cardbtn" id="sheetClose">Listo</button></div>
+    <p class="note" id="sheetNote"></p>
+    <div class="sheetlist" id="sheetList"></div>
+  </div>
+</div>
+<div class="toast" id="msg">Datos de ejemplo. Conecta tu adaptador OBD-II para ver tu carro en vivo.</div>
+
+<script src="three.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const state = {speed:0,rpm:0,cool:null,hv:null,thr:0,source:'demo',demoOn:true,trip:0,vmax:0,evTime:0,moveTime:0,last:performance.now()};
+let toastTimer; function setMsg(t,keep){ const m=$('msg'); m.textContent=t; m.hidden=!t; clearTimeout(toastTimer); if(t&&!keep) toastTimer=setTimeout(()=>m.hidden=true,7000); }
+setMsg($('msg').textContent);
+
+/* ---------- canvases (moved between views) ---------- */
+const carCanvas = document.createElement('canvas'); carCanvas.id='car'; carCanvas.setAttribute('aria-label','Prius c en 3D');
+const mapCanvas = document.createElement('canvas'); mapCanvas.setAttribute('aria-label','Mapa');
+$('slotCar').appendChild(carCanvas); $('slotMap').appendChild(mapCanvas);
+
+let view='dash';
+function go(v){
+  view=v;
+  ['dash','home','map','car'].forEach(n=>$('v-'+n).hidden = n!==v);
+  document.querySelectorAll('.side .ic').forEach(b=>b.classList.toggle('on', b.dataset.go===v));
+  if(v==='dash'){ $('slotCar').appendChild(carCanvas); $('slotMap').appendChild(mapCanvas); }
+  if(v==='map') $('slotMapFull').appendChild(mapCanvas);
+  if(v==='car') $('slotCarFull').appendChild(carCanvas);
+}
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+
+/* ---------- 3D car ---------- */
+const renderer = new THREE.WebGLRenderer({canvas:carCanvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(32,1,.1,100);
+scene.add(new THREE.HemisphereLight(0xdfe8ff,0x1a1d22,.9));
+const sun = new THREE.DirectionalLight(0xffffff,.9); sun.position.set(4,6,3); scene.add(sun);
+const rim = new THREE.DirectionalLight(0x7fb0ff,.5); rim.position.set(-5,3,-4); scene.add(rim);
+const car = new THREE.Group(); scene.add(car);
+const paint = new THREE.MeshStandardMaterial({color:0xc9ced6,metalness:.55,roughness:.35});
+const glass = new THREE.MeshStandardMaterial({color:0x0e1117,metalness:.9,roughness:.15});
+const dark = new THREE.MeshStandardMaterial({color:0x15171b,roughness:.8});
+const extr=(s,d)=>{const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:.06,bevelSize:.05,bevelSegments:3,curveSegments:18});g.translate(0,0,-d/2);return g;};
+const b=new THREE.Shape();
+b.moveTo(-1.95,.28);b.lineTo(-1.62,.28);b.absarc(-1.25,.3,.37,Math.PI,0,true);b.lineTo(.88,.28);b.absarc(1.25,.3,.37,Math.PI,0,true);
+b.lineTo(1.95,.28);b.lineTo(2.02,.5);b.lineTo(1.93,.72);b.lineTo(.85,.95);b.lineTo(-1.86,.99);b.lineTo(-2,.62);b.lineTo(-1.95,.28);
+car.add(new THREE.Mesh(extr(b,1.56),paint));
+const g=new THREE.Shape(); g.moveTo(.85,.95);g.lineTo(.02,1.4);g.lineTo(-1.42,1.4);g.lineTo(-1.86,.99);g.lineTo(.85,.95);
+car.add(new THREE.Mesh(extr(g,1.34),glass));
+const roof=new THREE.Mesh(new THREE.BoxGeometry(1.5,.05,1.3),paint); roof.position.set(-.7,1.46,0); car.add(roof);
+const head=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xdfeaff,emissiveIntensity:.8});
+const tail=new THREE.MeshStandardMaterial({color:0xff2b3a,emissive:0xff1a2a,emissiveIntensity:.7});
+[-.55,.55].forEach(z=>{const h=new THREE.Mesh(new THREE.BoxGeometry(.12,.08,.36),head);h.position.set(1.93,.72,z);h.rotation.z=-.45;car.add(h);
+  const t=new THREE.Mesh(new THREE.BoxGeometry(.06,.22,.24),tail);t.position.set(-1.96,.84,z*1.15);car.add(t);});
+const wheels=[], tireG=new THREE.CylinderGeometry(.31,.31,.21,28); tireG.rotateX(Math.PI/2);
+const rimG=new THREE.CylinderGeometry(.2,.2,.22,10); rimG.rotateX(Math.PI/2);
+const rimM=new THREE.MeshStandardMaterial({color:0x9aa2ad,metalness:.8,roughness:.3});
+[[-1.25,.74],[-1.25,-.74],[1.25,.74],[1.25,-.74]].forEach(([x,z])=>{const w=new THREE.Group();w.add(new THREE.Mesh(tireG,dark));w.add(new THREE.Mesh(rimG,rimM));
+  const s1=new THREE.Mesh(new THREE.BoxGeometry(.36,.05,.23),dark);w.add(s1);const s2=s1.clone();s2.rotation.z=Math.PI/2;w.add(s2);w.position.set(x,.31,z);car.add(w);wheels.push(w);});
+const sh=new THREE.Mesh(new THREE.CircleGeometry(2.6,48),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.5}));
+sh.rotation.x=-Math.PI/2;sh.scale.set(1,.55,1);sh.position.y=.005;scene.add(sh);
+let yaw=.75, drag=null;
+carCanvas.addEventListener('pointerdown',e=>{drag=e.clientX;carCanvas.setPointerCapture(e.pointerId)});
+carCanvas.addEventListener('pointermove',e=>{if(drag!==null){yaw+=(e.clientX-drag)*.01;drag=e.clientX;}});
+['pointerup','pointercancel'].forEach(t=>carCanvas.addEventListener(t,()=>drag=null));
+
+const colors=[['Plata',0xc9ced6],['Blanco',0xf1f1ee],['Negro',0x1b1d22],['Azul',0x2f5fb8],['Rojo',0xb3262e],['Verde',0x7fb24a]];
+let colorIdx=0; try{const c=localStorage.getItem('priusColor'); if(c!==null) colorIdx=+c||0;}catch(e){}
+colors.forEach(([name,hex],i)=>{const s=document.createElement('button');s.className='sw'+(i===colorIdx?' on':'');s.id='sw'+i;
+  s.style.background='#'+hex.toString(16).padStart(6,'0');s.setAttribute('aria-label',name);
+  s.onclick=()=>{paint.color.setHex(hex);document.querySelectorAll('.sw').forEach((x,j)=>x.classList.toggle('on',j===i));try{localStorage.setItem('priusColor',i)}catch(e){}};
+  $('swatches').appendChild(s);});
+paint.color.setHex(colors[colorIdx][1]);
+
+/* ---------- map ---------- */
+const mctx=mapCanvas.getContext('2d'); let mapOff=0, heading=0, navDist=0.4;
+function drawMap(){
+  const dpr=Math.min(devicePixelRatio,2), w=mapCanvas.clientWidth, h=mapCanvas.clientHeight; if(!w||!h) return;
+  if(mapCanvas.width!==Math.round(w*dpr)||mapCanvas.height!==Math.round(h*dpr)){mapCanvas.width=Math.round(w*dpr);mapCanvas.height=Math.round(h*dpr);}
+  mctx.setTransform(dpr,0,0,dpr,0,0); mctx.fillStyle='#1b1d21'; mctx.fillRect(0,0,w,h);
+  mctx.save(); mctx.translate(w/2,h*.66); mctx.rotate(heading);
+  const B=130, off=mapOff%B;
+  for(let x=-9;x<=9;x++)for(let y=-9;y<=9;y++){mctx.fillStyle=((x*7+y*3)%5===0)?'#1f3326':'#24272c';mctx.fillRect(x*B+12,y*B+off+12,B-24,B-24);}
+  mctx.strokeStyle='#3a3e46'; mctx.lineWidth=14;
+  for(let i=-9;i<=9;i++){mctx.beginPath();mctx.moveTo(i*B,-1400);mctx.lineTo(i*B,1400);mctx.stroke();mctx.beginPath();mctx.moveTo(-1400,i*B+off);mctx.lineTo(1400,i*B+off);mctx.stroke();}
+  mctx.strokeStyle='#0a84ff'; mctx.lineWidth=9; mctx.lineCap='round'; mctx.lineJoin='round';
+  mctx.beginPath(); mctx.moveTo(0,0); mctx.lineTo(0,-3*B+off); mctx.lineTo(B,-3*B+off); mctx.lineTo(B,-8*B+off); mctx.stroke();
+  mctx.restore();
+  mctx.save(); mctx.translate(w/2,h*.66);
+  mctx.fillStyle='rgba(10,132,255,.22)'; mctx.beginPath(); mctx.arc(0,0,24,0,Math.PI*2); mctx.fill();
+  mctx.fillStyle='#fff'; mctx.beginPath(); mctx.arc(0,0,12,0,Math.PI*2); mctx.fill();
+  mctx.fillStyle='#0a84ff'; mctx.beginPath(); mctx.moveTo(0,-8); mctx.lineTo(6,6); mctx.lineTo(0,3); mctx.lineTo(-6,6); mctx.closePath(); mctx.fill();
+  mctx.restore();
+}
+
+/* ---------- demo ---------- */
+let demoT=0;
+function demoStep(dt){
+  demoT+=dt; const c=demoT%60;
+  const target=c<4?0:c<14?22:c<26?34:c<34?48:c<44?31:c<52?12:0;
+  const prev=state.speed; state.speed+=(target-state.speed)*Math.min(1,dt*.6);
+  const a=state.speed-prev; state.thr=Math.max(0,Math.min(100,a>0?18+a*400:0));
+  state.rpm=(state.speed>40||state.thr>45)?1100+state.speed*22+state.thr*8:0;
+  state.cool=188; state.hv=Math.round(56+Math.sin(demoT/9)*6);
+}
+
+/* ---------- OBD-II BLE ---------- */
+let obd=null; const SERVICES=[0xfff0,0xffe0,0x18f0,'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+function setStatus(live,txt){$('dot').className='dot'+(live?' live':'');$('statusTxt').textContent=txt;
+  $('btnObd').textContent=live?'Conectado':'Conectar OBD'; $('btnObd').classList.toggle('live',live);}
+async function connectObd(){
+  if(obd) return;
+  if(NATIVE){ nativeScan(); return; }
+  if(!navigator.bluetooth){ setMsg('Esta vista no permite Bluetooth. Para conectar en vivo, abre la app desde su propio enlace en Chrome de tu tablet Android.',true); return; }
+  try{
+    setMsg('Elige tu adaptador en la lista (suele llamarse OBDII, OBDLink o IOS-Vlink).',true);
+    const dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:SERVICES});
+    const server=await dev.gatt.connect(); let tx=null,rx=null;
+    for(const svc of await server.getPrimaryServices()) for(const ch of await svc.getCharacteristics()){
+      if(!rx&&(ch.properties.notify||ch.properties.indicate)) rx=ch;
+      if(!tx&&(ch.properties.write||ch.properties.writeWithoutResponse)) tx=ch; }
+    if(!tx||!rx) throw new Error('el adaptador no tiene un canal de datos compatible.');
+    let buf='',waiter=null; await rx.startNotifications();
+    rx.addEventListener('characteristicvaluechanged',e=>{buf+=new TextDecoder().decode(e.target.value);
+      if(buf.includes('>')&&waiter){const r=buf;buf='';const w=waiter;waiter=null;w(r);}});
+    const send=cmd=>new Promise(res=>{waiter=res;setTimeout(()=>{if(waiter===res){waiter=null;res('');}},1500);
+      const d=new TextEncoder().encode(cmd+'\r');(tx.properties.writeWithoutResponse?tx.writeValueWithoutResponse(d):tx.writeValue(d)).catch(()=>{});});
+    for(const c of ['ATZ','ATE0','ATL0','ATS0','ATH0','ATSP0']) await send(c);
+    obd={dev,send}; state.source='obd'; state.demoOn=false; $('btnDemo').textContent='Volver a demo';
+    dev.addEventListener('gattserverdisconnected',()=>{if(state.source!=='obd')return;obd=null;state.source='demo';state.demoOn=false;setStatus(false,'Desconectado');setMsg('Se perdió la conexión con el adaptador.');});
+    setStatus(true,'En vivo'); setMsg('Conectado a '+(dev.name||'tu adaptador')+'.');
+    try{await navigator.wakeLock?.request('screen');}catch(e){}
+    poll();
+  }catch(err){ setMsg(err.name==='NotFoundError'?'No elegiste ningún adaptador. Enciende el carro y vuelve a intentarlo.':'No se pudo conectar: '+err.message); }
+}
+const parse=(r,pid)=>{const s=r.replace(/\s|>/g,'').toUpperCase();const i=s.indexOf('41'+pid);if(i<0)return null;return s.slice(i+4).match(/../g)?.map(h=>parseInt(h,16))||null;};
+async function poll(){ let n=0; while(obd){
+  const sp=parse(await obd.send('010D'),'0D'); if(sp) state.speed=sp[0]*.621371;
+  const rp=parse(await obd.send('010C'),'0C'); if(rp) state.rpm=(rp[0]*256+rp[1])/4;
+  const th=parse(await obd.send('0111'),'11'); if(th) state.thr=th[0]*100/255;
+  if(n++%5===0){ const co=parse(await obd.send('0105'),'05'); if(co) state.cool=(co[0]-40)*9/5+32;
+    const hv=parse(await obd.send('015B'),'5B'); if(hv) state.hv=Math.round(hv[0]*100/255); }
+}}
+$('btnObd').onclick=connectObd; $('appObd').onclick=connectObd;
+$('btnDemo').onclick=()=>{
+  if(state.source==='obd'){const d=obd?.dev; if(obd?.native) try{Android.obdDisconnect()}catch(e){} obd=null;state.source='demo';state.demoOn=true;setStatus(false,'Demo');try{d?.gatt.disconnect();}catch(e){}}
+  else state.demoOn=!state.demoOn;
+  $('btnDemo').textContent=state.demoOn?'Pausar demo':'Seguir demo';
+};
+$('btnReset').onclick=()=>Object.assign(state,{trip:0,vmax:0,evTime:0,moveTime:0});
+
+/* ---------- native bridge (APK) ---------- */
+const NATIVE = !!window.Android;
+const sheet=$('sheet'), sheetList=$('sheetList');
+function openSheet(title,note){ $('sheetTitle').textContent=title; $('sheetNote').textContent=note||''; $('sheetNote').hidden=!note; sheetList.innerHTML=''; sheet.hidden=false; }
+$('sheetClose').onclick=()=>{ sheet.hidden=true; if(NATIVE) try{Android.obdStopScan()}catch(e){} };
+
+function nativeScan(){
+  openSheet('Conectar OBD','Enciende el carro. Busca tu adaptador (suele llamarse OBDII, OBDLink, Vgate o IOS-Vlink) y tócalo.');
+  sheetList.innerHTML='<div class="note">Buscando dispositivos…</div>';
+  Android.obdScan();
+}
+const seen=new Map();
+window.onObdDevice = (name,addr) => {
+  if(seen.has(addr)||sheet.hidden) return; seen.set(addr,name);
+  const note=sheetList.querySelector('.note'); if(note) note.remove();
+  const r=document.createElement('button'); r.className='row';
+  r.innerHTML='<div class="ph"></div><span></span>'; r.querySelector('span').innerHTML='<small></small>';
+  r.querySelector('span').prepend(document.createTextNode(name||'Sin nombre')); r.querySelector('small').textContent=addr;
+  r.onclick=()=>{ sheet.hidden=true; Android.obdConnect(addr); setMsg('Conectando a '+(name||addr)+'…',true); };
+  sheetList.appendChild(r);
+};
+window.onObdStatus = (text,live) => {
+  setStatus(!!live, live?'En vivo':'Demo'); setMsg(text);
+  if(live){ state.source='obd'; state.demoOn=false; obd={native:true}; $('btnDemo').textContent='Volver a demo'; }
+  else if(state.source==='obd'){ state.source='demo'; state.demoOn=false; obd=null; }
+};
+window.onObdData = d => {
+  if(state.source!=='obd') return;
+  if(d.speed!=null) state.speed=d.speed*.621371;
+  if(d.rpm!=null) state.rpm=d.rpm;
+  if(d.thr!=null) state.thr=d.thr;
+  if(d.cool!=null) state.cool=d.cool*9/5+32;
+  if(d.hv!=null) state.hv=Math.round(d.hv);
+};
+
+/* ---------- my apps ---------- */
+const DEFAULT_FAVS=['com.spotify.music','com.waze','com.google.android.apps.maps','com.lyft.android.driver','com.google.android.apps.youtube.music','com.whatsapp'];
+const FALLBACK=[['Spotify','com.spotify.music','#1db954'],['Waze','com.waze','#33ccff'],['Maps','com.google.android.apps.maps','#34a853'],['Lyft Driver','com.lyft.android.driver','#ff00bf'],['YT Music','com.google.android.apps.youtube.music','#e5302a'],['WhatsApp','com.whatsapp','#25d366']];
+let installed=null, favs=null;
+try{ favs=JSON.parse(localStorage.getItem('favApps')); }catch(e){}
+function getInstalled(){
+  if(installed) return installed;
+  if(NATIVE){ try{ installed=JSON.parse(Android.getApps()); }catch(e){ installed=[]; } }
+  else installed=FALLBACK.map(([label,pkg,color])=>({label,pkg,color}));
+  return installed;
+}
+function saveFavs(){ try{ localStorage.setItem('favApps',JSON.stringify(favs)); }catch(e){} }
+function openApp(a){
+  if(NATIVE){ Android.openApp(a.pkg); return; }
+  setMsg('Abrir '+a.label+' funciona en la APK instalada en tu tablet.');
+}
+function appIcon(a,cls){
+  const ic=document.createElement('span'); ic.className='ic appic '+(cls||'');
+  if(a.icon){ const im=new Image(); im.src='data:image/png;base64,'+a.icon; im.alt=''; ic.appendChild(im); }
+  else { ic.classList.add('letter'); ic.style.background=a.color||'#48484a'; ic.textContent=a.label[0]; }
+  return ic;
+}
+function renderFavs(){
+  const list=getInstalled();
+  if(!favs) favs=DEFAULT_FAVS.filter(p=>list.some(a=>a.pkg===p));
+  const apps=favs.map(p=>list.find(a=>a.pkg===p)).filter(Boolean);
+  const grid=$('favApps'); grid.innerHTML='';
+  apps.forEach(a=>{ const t=document.createElement('button'); t.className='tile-app'; t.appendChild(appIcon(a)); t.appendChild(document.createTextNode(a.label)); t.onclick=()=>openApp(a); grid.appendChild(t); });
+  const side=$('sideFav'); side.innerHTML='';
+  apps.slice(0,2).forEach(a=>{ const b=appIcon(a); const btn=document.createElement('button'); btn.className=b.className; btn.innerHTML=b.innerHTML; btn.style.cssText=b.style.cssText; btn.setAttribute('aria-label',a.label); btn.onclick=()=>openApp(a); side.appendChild(btn); });
+}
+$('appAdd').onclick=()=>{
+  openSheet('Mis apps','Marca las apps que quieres en tu pantalla de inicio. Las dos primeras salen también en la barra lateral.');
+  getInstalled().forEach(a=>{
+    const r=document.createElement('button'); r.className='row'+(favs.includes(a.pkg)?' on':'');
+    if(a.icon){ const im=new Image(); im.src='data:image/png;base64,'+a.icon; im.alt=''; r.appendChild(im); } else { const p=document.createElement('div'); p.className='ph'; p.style.background=a.color; r.appendChild(p); }
+    const s=document.createElement('span'); s.textContent=a.label; r.appendChild(s);
+    const c=document.createElement('div'); c.className='chk'; c.textContent='✓'; r.appendChild(c);
+    r.onclick=()=>{ if(favs.includes(a.pkg)) favs=favs.filter(p=>p!==a.pkg); else favs.push(a.pkg); r.classList.toggle('on'); saveFavs(); renderFavs(); };
+    sheetList.appendChild(r);
+  });
+};
+renderFavs();
+
+/* ---------- loop ---------- */
+function ui(v){
+  const sp=Math.round(v); $('speed').textContent=sp; document.querySelectorAll('.speedClone').forEach(e=>e.textContent=sp);
+  $('rpm').textContent=Math.round(state.rpm).toLocaleString('en-US');
+  $('cool').textContent=state.cool==null?'—':Math.round(state.cool)+'°F';
+  $('hv').textContent=state.hv==null?'—':state.hv+'%';
+  $('trip').textContent=state.trip.toFixed(1)+' mi';
+  $('vmax').textContent=Math.round(state.vmax);
+  $('evp').textContent=(state.moveTime?Math.round(state.evTime/state.moveTime*100):0)+'%';
+  let cls='mode',txt='Listo'; if(v>=.5){ if(state.rpm<50){cls='mode ev';txt='● EV eléctrico';} else {cls='mode gas';txt='● Motor gasolina';} }
+  [$('mode'),document.querySelector('.modeClone')].forEach(m=>{m.className=cls+(m.classList.contains('modeClone')?' modeClone':'');m.textContent=txt;});
+  $('navDist').textContent=navDist.toFixed(1)+' mi';
+  $('clock').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).replace(/\s?[AP]M/,'');
+}
+function frame(now){
+  const dt=Math.min(.1,(now-state.last)/1000); state.last=now;
+  if(state.source==='demo'&&state.demoOn) demoStep(dt); else if(state.source==='demo'){state.speed*=.9;state.rpm=0;state.thr=0;}
+  const v=Math.max(0,state.speed);
+  state.trip+=v*dt/3600; state.vmax=Math.max(state.vmax,v);
+  if(v>.5){state.moveTime+=dt; if(state.rpm<50) state.evTime+=dt;}
+  navDist-=v*dt/3600; if(navDist<.05) navDist=0.4+Math.random()*0.8;
+  if(drag===null) yaw+=dt*.15;
+  camera.position.set(Math.cos(yaw)*6.2,2.4,Math.sin(yaw)*6.2); camera.lookAt(0,.55,0);
+  wheels.forEach(w=>w.rotation.z-=v*.447*dt/.31);
+  const cw=carCanvas.clientWidth, ch=carCanvas.clientHeight;
+  if(cw&&ch){renderer.setSize(cw,ch,false);camera.aspect=cw/ch;camera.updateProjectionMatrix();renderer.render(scene,camera);}
+  mapOff+=v*dt*2.2; heading=Math.sin(now/15000)*.08; drawMap();
+  ui(v); requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+
+</html>
