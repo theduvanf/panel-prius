@@ -199,7 +199,7 @@ a.tile-app{color:var(--fg);text-decoration:none}
         <h2>Prius c 2014</h2>
         <div class="gauge"><b class="speedClone">0</b><span class="note">mph</span></div>
         <span class="mode modeClone">Listo</span>
-        <div><div class="note" style="margin-bottom:8px">Color del carro</div><div class="swatches" id="swatches"></div></div>
+        <div id="colorBox"><div class="note" style="margin-bottom:8px">Color del carro</div><div class="swatches" id="swatches"></div></div>
         <button class="cardbtn" id="btnDemo">Pausar demo</button>
         <button class="cardbtn" id="btnReset" style="background:var(--card-2)">Reiniciar viaje</button>
         <p class="note">La batería híbrida puede salir en blanco: Toyota la reporta con códigos propios en algunos modelos.</p>
@@ -217,6 +217,7 @@ a.tile-app{color:var(--fg);text-decoration:none}
 <div class="toast" id="msg">Datos de ejemplo. Conecta tu adaptador OBD-II para ver tu carro en vivo.</div>
 
 <script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -265,7 +266,7 @@ const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30,1,.1,10
 scene.add(new THREE.HemisphereLight(0xe8eeff,0x202226,.35));
 const sun = new THREE.DirectionalLight(0xffffff,1.1); sun.position.set(5,8,4); scene.add(sun);
 
-const car = new THREE.Group(); scene.add(car);
+const car = new THREE.Group(); scene.add(car); let realCar=null;
 const paint = new THREE.MeshPhysicalMaterial({color:0xc9ced6,metalness:.6,roughness:.32,clearcoat:1,clearcoatRoughness:.06,side:THREE.DoubleSide});
 const glass = new THREE.MeshPhysicalMaterial({color:0x07090c,metalness:.2,roughness:.04,clearcoat:1,clearcoatRoughness:0,side:THREE.DoubleSide});
 const trim = new THREE.MeshStandardMaterial({color:0x111214,roughness:.7,side:THREE.DoubleSide});
@@ -396,6 +397,24 @@ AXLES.forEach(ax=>[1,-1].forEach(s=>{
   sh.rotation.x=-Math.PI/2; sh.position.y=.002; scene.add(sh);
 })();
 function setPaint(hex){ paint.color.setHex(hex).convertSRGBToLinear(); }
+// Your own Prius, scanned from your photos (prius.glb ships inside the APK). Falls back to the drawn car.
+const REAL_YAW = Math.PI; // turns the scanned model so its nose points the same way as the drawn car
+(function loadRealCar(){
+  if(!THREE.GLTFLoader) return;
+  new THREE.GLTFLoader().load('prius.glb', gltf=>{
+    const inner=gltf.scene, pivot=new THREE.Group(); pivot.add(inner);
+    let box=new THREE.Box3().setFromObject(inner), size=box.getSize(new THREE.Vector3());
+    if(size.z>size.x) inner.rotation.y=Math.PI/2;
+    inner.rotation.y+=REAL_YAW;
+    box=new THREE.Box3().setFromObject(inner); size=box.getSize(new THREE.Vector3());
+    const k=3.99/Math.max(size.x,.001); inner.scale.multiplyScalar(k);
+    box=new THREE.Box3().setFromObject(inner); const c=box.getCenter(new THREE.Vector3());
+    inner.position.x-=c.x; inner.position.z-=c.z; inner.position.y-=box.min.y;
+    inner.traverse(o=>{ if(o.isMesh&&o.material){ o.material.envMapIntensity=1; } });
+    car.visible=false; scene.add(pivot); realCar=pivot;
+    const cb=document.getElementById('colorBox'); if(cb) cb.hidden=true;
+  }, undefined, ()=>{});
+})();
 let yaw=.75, drag=null;
 carCanvas.addEventListener('pointerdown',e=>{drag=e.clientX;carCanvas.setPointerCapture(e.pointerId)});
 carCanvas.addEventListener('pointermove',e=>{if(drag!==null){yaw+=(e.clientX-drag)*.01;drag=e.clientX;}});
