@@ -1,0 +1,28 @@
+name: Bajar modelo 3D
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/fetch-model.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar el Prius escaneado y el cargador 3D
+        run: |
+          curl -fsSL "https://d8j0ntlcm91z4.cloudfront.net/user_3JR41wVb6QyncXhuueix9WqU8XZ/hf_20261031_154955_b60c5e7e-d980-4a99-bfc8-4c52e5e12352.glb" -o app/src/main/assets/prius.glb
+          curl -fsSL "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" -o app/src/main/assets/GLTFLoader.js
+          ls -la app/src/main/assets
+      - name: Guardar en el repositorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/prius.glb app/src/main/assets/GLTFLoader.js
+          git commit -m "Agrega el modelo 3D del Prius y el cargador GLTF"
+          git push
