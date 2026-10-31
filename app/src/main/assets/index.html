@@ -90,6 +90,18 @@ a.tile-app{color:var(--fg);text-decoration:none}
 .gauge{display:flex;align-items:baseline;gap:6px}
 .gauge b{font-size:64px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--card-2);border:1px solid var(--line);border-radius:14px;padding:10px 16px;font-size:14px;max-width:min(560px,90vw);z-index:5;line-height:1.4}
+.music{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;gap:12px;background:rgba(28,28,31,.94);backdrop-filter:blur(10px);border-radius:18px;padding:8px 10px 8px 8px;width:min(400px,calc(100% - 240px))}
+.music .art{width:56px;height:56px;border-radius:10px;border:0;padding:0;flex:none;background:var(--card-2) center/cover no-repeat;cursor:pointer}
+.mtxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mtxt b,.mtxt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtxt b{font-size:15px}.mtxt span{font-size:13px;color:var(--muted)}
+.mbtns{display:flex;align-items:center;gap:4px;flex:none}
+.mbtns button{width:40px;height:40px;border-radius:50%;border:0;background:none;display:grid;place-items:center;cursor:pointer}
+.mbtns button.big{width:48px;height:48px;background:var(--fg)}
+.mbtns svg{width:22px;height:22px;fill:var(--fg)}
+.mbtns button.big svg{fill:#000}
+.music .cardbtn{padding:10px 14px;font-size:14px;flex:none}
+@media (max-width:1000px){.music{left:14px;right:14px;width:auto;bottom:86px}}
 .ic img{width:100%;height:100%;border-radius:inherit;object-fit:cover}
 .ic.appic{background:var(--card-2)}
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:8;padding:16px}
@@ -152,6 +164,16 @@ a.tile-app{color:var(--fg);text-decoration:none}
         <div class="nav"><div class="arrow"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 3l7 9h-4.5v9h-5v-9H5z"/></svg></div>
           <div><b id="navDist">0.4 mi</b><span>Sigue derecho por la calle principal</span></div></div>
         <div class="speedpill"><div class="limit">LÍMITE<b>35</b></div><div class="bigv"><span id="speed">0</span><small>mph</small></div></div>
+        <div class="music" id="music" hidden>
+          <button class="art" id="mArt" aria-label="Abrir la app de música"></button>
+          <div class="mtxt"><b id="mTitle">Nada sonando</b><span id="mArtist">Abre Spotify o tu app de música</span></div>
+          <div class="mbtns">
+            <button id="mPrev" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+            <button id="mPlay" class="big" aria-label="Reproducir"><svg viewBox="0 0 24 24"><path id="mPlayIcon" d="M7 4v16l13-8z"/></svg></button>
+            <button id="mNext" aria-label="Siguiente"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          </div>
+          <button class="cardbtn" id="mAllow" hidden>Activar música</button>
+        </div>
       </div>
       <div class="card"><div class="ctitle">Mi Prius c</div><div class="carbox" id="slotCar"></div>
         <div class="carinfo"><span class="mode" id="mode">Listo</span><span class="status"><span class="dot" id="dot"></span><span id="statusTxt">Demo</span></span></div>
@@ -539,6 +561,27 @@ window.onObdData = d => {
   if(d.cool!=null) state.cool=d.cool*9/5+32;
   if(d.hv!=null) state.hv=Math.round(d.hv);
 };
+
+/* ---------- music (Spotify and other music apps) ---------- */
+let media=null;
+const PLAY='M7 4v16l13-8z', PAUSE='M6 4h4v16H6zM14 4h4v16h-4z';
+window.onMedia=(m,allowed)=>{
+  const box=$('music'); box.hidden=false;
+  $('mAllow').hidden=allowed; document.querySelector('.mbtns').hidden=!allowed;
+  if(!allowed){ $('mTitle').textContent='Controles de música'; $('mArtist').textContent='Permite que el panel vea lo que suena'; $('mArt').style.backgroundImage=''; media=null; return; }
+  media=m;
+  $('mTitle').textContent = m&&m.title ? m.title : 'Nada sonando';
+  $('mArtist').textContent = m ? [m.artist,m.app].filter(Boolean).join(' · ') : 'Abre Spotify o tu app de música';
+  $('mArt').style.backgroundImage = m&&m.art ? 'url(data:image/jpeg;base64,'+m.art+')' : '';
+  $('mPlayIcon').setAttribute('d', m&&m.playing ? PAUSE : PLAY);
+  $('mPlay').setAttribute('aria-label', m&&m.playing ? 'Pausar' : 'Reproducir');
+};
+$('mAllow').onclick=()=>{ Android.mediaAccess(); setMsg('Busca "Panel Prius" en la lista, actívalo y vuelve al panel.'); };
+$('mPlay').onclick=()=>{ if(!media) return; Android.media(media.playing?'pause':'play'); };
+$('mNext').onclick=()=>media&&Android.media('next');
+$('mPrev').onclick=()=>media&&Android.media('prev');
+$('mArt').onclick=()=>{ const pkg=media&&media.pkg || 'com.spotify.music'; Android.openApp(pkg); };
+if(NATIVE) try{ Android.mediaStart(); }catch(e){}
 
 /* ---------- my apps ---------- */
 const DEFAULT_FAVS=['com.spotify.music','com.waze','com.google.android.apps.maps','com.lyft.android.driver','com.google.android.apps.youtube.music','com.whatsapp'];
