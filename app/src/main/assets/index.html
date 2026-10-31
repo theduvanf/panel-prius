@@ -243,33 +243,159 @@ document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=
 /* ---------- 3D car ---------- */
 const renderer = new THREE.WebGLRenderer({canvas:carCanvas,antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(32,1,.1,100);
-scene.add(new THREE.HemisphereLight(0xdfe8ff,0x1a1d22,.9));
-const sun = new THREE.DirectionalLight(0xffffff,.9); sun.position.set(4,6,3); scene.add(sun);
-const rim = new THREE.DirectionalLight(0x7fb0ff,.5); rim.position.set(-5,3,-4); scene.add(rim);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = .95;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30,1,.1,100);
+
+// Studio reflections: a soft sky-to-floor gradient with a few light panels, so paint and glass look real.
+(function(){
+  const env = new THREE.Scene();
+  const g = new THREE.SphereGeometry(20,32,16), cols=[];
+  const pos = g.attributes.position;
+  for(let i=0;i<pos.count;i++){ const t=(pos.getY(i)/20+1)/2; const c=new THREE.Color().setRGB(.02+.22*t*t,.025+.24*t*t,.03+.28*t*t); cols.push(c.r,c.g,c.b); }
+  g.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
+  env.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+  const lm = new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
+  [[0,12,0,-Math.PI/2,0,14,4],[10,5,6,0,-.9,8,3],[-10,4,-6,0,.9,8,3],[0,3,-12,0,0,10,2]].forEach(([x,y,z,rx,ry,w,h])=>{
+    const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),lm); p.position.set(x,y,z); p.rotation.set(rx,ry,0); p.lookAt(0,0,0); env.add(p); });
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(env,.03).texture;
+})();
+scene.add(new THREE.HemisphereLight(0xe8eeff,0x202226,.35));
+const sun = new THREE.DirectionalLight(0xffffff,1.1); sun.position.set(5,8,4); scene.add(sun);
+
 const car = new THREE.Group(); scene.add(car);
-const paint = new THREE.MeshStandardMaterial({color:0xc9ced6,metalness:.55,roughness:.35});
-const glass = new THREE.MeshStandardMaterial({color:0x0e1117,metalness:.9,roughness:.15});
-const dark = new THREE.MeshStandardMaterial({color:0x15171b,roughness:.8});
-const extr=(s,d)=>{const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:.06,bevelSize:.05,bevelSegments:3,curveSegments:18});g.translate(0,0,-d/2);return g;};
-const b=new THREE.Shape();
-b.moveTo(-1.95,.28);b.lineTo(-1.62,.28);b.absarc(-1.25,.3,.37,Math.PI,0,true);b.lineTo(.88,.28);b.absarc(1.25,.3,.37,Math.PI,0,true);
-b.lineTo(1.95,.28);b.lineTo(2.02,.5);b.lineTo(1.93,.72);b.lineTo(.85,.95);b.lineTo(-1.86,.99);b.lineTo(-2,.62);b.lineTo(-1.95,.28);
-car.add(new THREE.Mesh(extr(b,1.56),paint));
-const g=new THREE.Shape(); g.moveTo(.85,.95);g.lineTo(.02,1.4);g.lineTo(-1.42,1.4);g.lineTo(-1.86,.99);g.lineTo(.85,.95);
-car.add(new THREE.Mesh(extr(g,1.34),glass));
-const roof=new THREE.Mesh(new THREE.BoxGeometry(1.5,.05,1.3),paint); roof.position.set(-.7,1.46,0); car.add(roof);
-const head=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xdfeaff,emissiveIntensity:.8});
-const tail=new THREE.MeshStandardMaterial({color:0xff2b3a,emissive:0xff1a2a,emissiveIntensity:.7});
-[-.55,.55].forEach(z=>{const h=new THREE.Mesh(new THREE.BoxGeometry(.12,.08,.36),head);h.position.set(1.93,.72,z);h.rotation.z=-.45;car.add(h);
-  const t=new THREE.Mesh(new THREE.BoxGeometry(.06,.22,.24),tail);t.position.set(-1.96,.84,z*1.15);car.add(t);});
-const wheels=[], tireG=new THREE.CylinderGeometry(.31,.31,.21,28); tireG.rotateX(Math.PI/2);
-const rimG=new THREE.CylinderGeometry(.2,.2,.22,10); rimG.rotateX(Math.PI/2);
-const rimM=new THREE.MeshStandardMaterial({color:0x9aa2ad,metalness:.8,roughness:.3});
-[[-1.25,.74],[-1.25,-.74],[1.25,.74],[1.25,-.74]].forEach(([x,z])=>{const w=new THREE.Group();w.add(new THREE.Mesh(tireG,dark));w.add(new THREE.Mesh(rimG,rimM));
-  const s1=new THREE.Mesh(new THREE.BoxGeometry(.36,.05,.23),dark);w.add(s1);const s2=s1.clone();s2.rotation.z=Math.PI/2;w.add(s2);w.position.set(x,.31,z);car.add(w);wheels.push(w);});
-const sh=new THREE.Mesh(new THREE.CircleGeometry(2.6,48),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.5}));
-sh.rotation.x=-Math.PI/2;sh.scale.set(1,.55,1);sh.position.y=.005;scene.add(sh);
+const paint = new THREE.MeshPhysicalMaterial({color:0xc9ced6,metalness:.6,roughness:.32,clearcoat:1,clearcoatRoughness:.06,side:THREE.DoubleSide});
+const glass = new THREE.MeshPhysicalMaterial({color:0x07090c,metalness:.2,roughness:.04,clearcoat:1,clearcoatRoughness:0,side:THREE.DoubleSide});
+const trim = new THREE.MeshStandardMaterial({color:0x111214,roughness:.7,side:THREE.DoubleSide});
+const head = new THREE.MeshPhysicalMaterial({color:0xdfe6ee,metalness:.9,roughness:.08,clearcoat:1,emissive:0x8899aa,emissiveIntensity:.35,side:THREE.DoubleSide});
+const tail = new THREE.MeshPhysicalMaterial({color:0x8a0d16,roughness:.15,clearcoat:1,emissive:0x5a0008,emissiveIntensity:.6,side:THREE.DoubleSide});
+const MATS = [paint,glass,trim,head,tail];
+
+// Monotone cubic interpolation through keyframes (x runs front +2.0 → rear -2.0, in meters).
+function curve(xs, ys){
+  const n=xs.length, X=xs.map(v=>-v), d=[], m=new Array(n);
+  for(let i=0;i<n-1;i++) d.push((ys[i+1]-ys[i])/(X[i+1]-X[i]));
+  m[0]=d[0]; m[n-1]=d[n-2];
+  for(let i=1;i<n-1;i++) m[i]= d[i-1]*d[i]<=0 ? 0 : (d[i-1]+d[i])/2;
+  return x=>{ x=-x; let i=0; while(i<n-2 && x>X[i+1]) i++;
+    const h=X[i+1]-X[i], t=Math.min(1,Math.max(0,(x-X[i])/h)), t2=t*t, t3=t2*t;
+    return (2*t3-3*t2+1)*ys[i]+(t3-2*t2+t)*h*m[i]+(-2*t3+3*t2)*ys[i+1]+(t3-t2)*h*m[i+1]; };
+}
+// Prius c 2014 proportions: 3.99 m long, 1.70 m wide, 1.45 m tall, 2.55 m wheelbase.
+const KX   =[ 2.0, 1.94, 1.8, 1.55, 1.2, .86, .5, .1, -.4, -1.0, -1.4, -1.62, -1.75, -1.88, -1.96, -2.0];
+const TOP  = curve(KX,[.50,.66,.76,.84,.92,.985,1.2,1.40,1.45,1.44,1.41,1.38,1.30,1.12,.98,.85]);
+const BELT = curve(KX,[.48,.62,.72,.79,.86,.92,.94,.96,.98,1.0,1.02,1.03,1.03,1.02,.96,.84]);
+const BOT  = curve(KX,[.30,.22,.19,.17,.16,.16,.16,.16,.16,.16,.17,.20,.23,.26,.30,.34]);
+const WID  = curve(KX,[.45,.68,.79,.83,.845,.845,.845,.845,.845,.845,.84,.83,.81,.77,.70,.60]);
+const ROOFW= curve(KX,[.35,.50,.62,.68,.70,.68,.64,.60,.60,.60,.60,.60,.60,.62,.58,.50]);
+const AXLES=[1.21,-1.34], WR=.305, ARCH=.385;
+
+function material(x,y,z){
+  const az=Math.abs(z), top=TOP(x), belt=Math.min(BELT(x),top-.02), w=WID(x), wr=ROOFW(x);
+  if(x>1.82 && y<.46 && az<w*.78) return 2;                               // lower grille
+  if(x>1.9 && y>.5 && y<.57 && az<.3) return 2;                           // upper grille slit
+  if(x<-1.74 && az>w*.5 && y>belt-.17 && y<belt+.09) return 4;            // tail lamps
+  const roofTop = x<.06 && x>-1.63 && az<wr*.9 && y>top-.07;
+  if(y>belt+.025 && x<.88 && x>-1.9 && !roofTop) return 1;                // glass band, windshield, hatch
+  if(x<-1.6 && x>-1.72 && y>top-.1) return 0;                             // roof spoiler
+  return 0;
+}
+
+(function buildBody(){
+  const S=280, N=56, verts=[], groups=[[],[],[],[],[]];
+  const ring = 2*N;
+  for(let i=0;i<=S;i++){
+    const x = 2.0 - 4.0*i/S, top=TOP(x), yb=BOT(x), belt=Math.min(BELT(x),top-.02), w=WID(x), wr=Math.min(ROOFW(x),w*.95);
+    const k=Math.min(.08,(top-belt)*.45);
+    const pts=[[0,yb],[w*.72,yb],[w*.96,yb+.08],[w,(yb+belt)/2+.05],[w*.985,belt],[wr,top-k],[wr*.55,top-.012],[0,top]]
+      .map(([z,y])=>new THREE.Vector3(z,y,0));
+    const half = new THREE.CatmullRomCurve3(pts,false,'centripetal').getSpacedPoints(N);
+    for(let j=0;j<=N;j++) verts.push(x,half[j].y,half[j].x);
+    for(let j=N-1;j>=1;j--) verts.push(x,half[j].y,-half[j].x);
+  }
+  const idx=(i,j)=>i*ring+((j%ring)+ring)%ring;
+  const V=(k)=>[verts[k*3],verts[k*3+1],verts[k*3+2]];
+  const inArch=(x,y,z)=>Math.abs(z)>WID(x)*.55 && AXLES.some(ax=>Math.hypot(x-ax,y-WR)<ARCH);
+  for(let i=0;i<S;i++) for(let j=0;j<ring;j++){
+    const a=idx(i,j), b=idx(i+1,j), c=idx(i+1,j+1), d=idx(i,j+1);
+    const [x1,y1,z1]=V(a), [x2,y2,z2]=V(c), cx=(x1+x2)/2, cy=(y1+y2)/2, cz=(z1+z2)/2;
+    if(inArch(cx,cy,cz)) continue;
+    groups[material(cx,cy,cz)].push(a,d,b, b,d,c);
+  }
+  // end caps
+  [[0,true],[S,false]].forEach(([i,front])=>{
+    let sx=0,sy=0,sz=0; for(let j=0;j<ring;j++){const v=V(idx(i,j)); sx+=v[0];sy+=v[1];sz+=v[2];}
+    const ci=verts.length/3; verts.push(sx/ring,sy/ring,sz/ring);
+    for(let j=0;j<ring;j++){ const p=idx(i,j), q=idx(i,j+1), [x,y,z]=V(p);
+      groups[material(x+(front?.01:-.01),y,z)].push(...(front?[ci,q,p]:[ci,p,q])); }
+  });
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  let all=[]; groups.forEach((g,m)=>{ geo.addGroup(all.length,g.length,m); all=all.concat(g); });
+  geo.setIndex(all); geo.computeVertexNormals();
+  car.add(new THREE.Mesh(geo,MATS));
+})();
+
+// Wheel-arch liners
+AXLES.forEach(ax=>[1,-1].forEach(s=>{
+  const g=new THREE.CylinderGeometry(ARCH,ARCH,.42,28,1,true,Math.PI/2,Math.PI); g.rotateX(Math.PI/2);
+  const m=new THREE.Mesh(g,trim); m.position.set(ax,WR,s*.64); car.add(m);
+}));
+
+// Fender lips hide the cut edge of each wheel arch
+AXLES.forEach(ax=>[1,-1].forEach(s=>{
+  const lip=new THREE.Mesh(new THREE.TorusGeometry(ARCH+.01,.045,12,48,Math.PI),trim); lip.scale.z=.6; lip.position.set(ax,WR,s*(WID(ax)+.004)); car.add(lip);
+}));
+
+// Swept-back headlights
+[1,-1].forEach(s=>{
+  const x0=1.66, y0=TOP(x0)-.045, z0=s*(WID(x0)*.78);
+  const h=new THREE.Mesh(new THREE.SphereGeometry(1,32,16),head); h.scale.set(.34,.05,.16);
+  h.position.set(x0,y0,z0); h.rotation.set(0,s*.55,-.32); car.add(h);
+  const lens=new THREE.Mesh(new THREE.SphereGeometry(1,24,12),trim); lens.scale.set(.36,.058,.17);
+  lens.position.set(x0-.005,y0-.006,z0*.995); lens.rotation.copy(h.rotation); car.add(lens);
+});
+
+// Mirrors
+[1,-1].forEach(s=>{
+  const housing=new THREE.Mesh(new THREE.SphereGeometry(.1,20,12),paint); housing.scale.set(.85,.7,1.15);
+  housing.position.set(.66,1.02,s*.96); car.add(housing);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(.05,.04,.12),trim); cap.position.set(.7,.97,s*.88); car.add(cap);
+});
+
+// Wheels: 175/65R15 tire, 5-spoke alloy, brake disc
+const tireProfile=[]; for(let a=0;a<=16;a++){ const t=-Math.PI/2+Math.PI*a/16; tireProfile.push(new THREE.Vector2(.25+.055*Math.cos(t), .085*Math.sin(t))); }
+tireProfile.unshift(new THREE.Vector2(.2,-.085)); tireProfile.push(new THREE.Vector2(.2,.085));
+const tireG=new THREE.LatheGeometry(tireProfile,48); tireG.rotateX(Math.PI/2);
+const rubber=new THREE.MeshStandardMaterial({color:0x161618,roughness:.9});
+const alloy=new THREE.MeshPhysicalMaterial({color:0xc4c9cf,metalness:1,roughness:.22,clearcoat:.6});
+const rimShape=new THREE.Shape(); rimShape.absarc(0,0,.205,0,Math.PI*2,false);
+for(let k=0;k<5;k++){ const a0=k*2*Math.PI/5+.28, a1=a0+2*Math.PI/5-.56, h=new THREE.Path();
+  h.moveTo(Math.cos(a0)*.07,Math.sin(a0)*.07); h.absarc(0,0,.18,a0,a1,false); h.lineTo(Math.cos(a1)*.07,Math.sin(a1)*.07); h.closePath(); rimShape.holes.push(h); }
+const rimG=new THREE.ExtrudeGeometry(rimShape,{depth:.03,bevelEnabled:true,bevelThickness:.012,bevelSize:.008,bevelSegments:2,curveSegments:32});
+const discG=new THREE.CylinderGeometry(.15,.15,.02,32); discG.rotateX(Math.PI/2);
+const hubG=new THREE.CylinderGeometry(.045,.05,.04,24); hubG.rotateX(Math.PI/2);
+const wheels=[];
+AXLES.forEach(ax=>[1,-1].forEach(s=>{
+  const w=new THREE.Group();
+  w.add(new THREE.Mesh(tireG,rubber));
+  const rim=new THREE.Mesh(rimG,alloy); rim.position.z=s>0?.03:-.06; w.add(rim);
+  const disc=new THREE.Mesh(discG,new THREE.MeshStandardMaterial({color:0x55585c,metalness:.7,roughness:.5})); disc.position.z=-s*.02; w.add(disc);
+  const hub=new THREE.Mesh(hubG,alloy); hub.position.z=s*.07; w.add(hub);
+  w.position.set(ax,WR,s*.73); car.add(w); wheels.push(w);
+}));
+
+// Soft contact shadow
+(function(){
+  const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+  const g=x.createRadialGradient(64,64,4,64,64,64); g.addColorStop(0,'rgba(0,0,0,.75)'); g.addColorStop(.55,'rgba(0,0,0,.45)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g; x.fillRect(0,0,128,128);
+  const sh=new THREE.Mesh(new THREE.PlaneGeometry(5.2,2.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+  sh.rotation.x=-Math.PI/2; sh.position.y=.002; scene.add(sh);
+})();
+function setPaint(hex){ paint.color.setHex(hex).convertSRGBToLinear(); }
 let yaw=.75, drag=null;
 carCanvas.addEventListener('pointerdown',e=>{drag=e.clientX;carCanvas.setPointerCapture(e.pointerId)});
 carCanvas.addEventListener('pointermove',e=>{if(drag!==null){yaw+=(e.clientX-drag)*.01;drag=e.clientX;}});
@@ -279,9 +405,9 @@ const colors=[['Plata',0xc9ced6],['Blanco',0xf1f1ee],['Negro',0x1b1d22],['Azul',
 let colorIdx=0; try{const c=localStorage.getItem('priusColor'); if(c!==null) colorIdx=+c||0;}catch(e){}
 colors.forEach(([name,hex],i)=>{const s=document.createElement('button');s.className='sw'+(i===colorIdx?' on':'');s.id='sw'+i;
   s.style.background='#'+hex.toString(16).padStart(6,'0');s.setAttribute('aria-label',name);
-  s.onclick=()=>{paint.color.setHex(hex);document.querySelectorAll('.sw').forEach((x,j)=>x.classList.toggle('on',j===i));try{localStorage.setItem('priusColor',i)}catch(e){}};
+  s.onclick=()=>{setPaint(hex);document.querySelectorAll('.sw').forEach((x,j)=>x.classList.toggle('on',j===i));try{localStorage.setItem('priusColor',i)}catch(e){}};
   $('swatches').appendChild(s);});
-paint.color.setHex(colors[colorIdx][1]);
+setPaint(colors[colorIdx][1]);
 
 /* ---------- map ---------- */
 const mctx=mapCanvas.getContext('2d'); let mapOff=0, heading=0, navDist=0.4;
@@ -461,7 +587,7 @@ function frame(now){
   if(v>.5){state.moveTime+=dt; if(state.rpm<50) state.evTime+=dt;}
   navDist-=v*dt/3600; if(navDist<.05) navDist=0.4+Math.random()*0.8;
   if(drag===null) yaw+=dt*.15;
-  camera.position.set(Math.cos(yaw)*6.2,2.4,Math.sin(yaw)*6.2); camera.lookAt(0,.55,0);
+  const asp=Math.max(.6,camera.aspect), dist=Math.max(5.6, 2.45/(Math.tan(camera.fov*Math.PI/360)*asp)); camera.position.set(Math.cos(yaw)*dist,dist*.36,Math.sin(yaw)*dist); camera.lookAt(0,.62,0);
   wheels.forEach(w=>w.rotation.z-=v*.447*dt/.31);
   const cw=carCanvas.clientWidth, ch=carCanvas.clientHeight;
   if(cw&&ch){renderer.setSize(cw,ch,false);camera.aspect=cw/ch;camera.updateProjectionMatrix();renderer.render(scene,camera);}
